@@ -95,6 +95,7 @@ public final class Global {
     public static String cachePath;
     public static String savedPath;
     public static String downloadPath;
+    public static String gqrsTempPath;
     public static String quickcheckpath;
     public static String folder;
     public static String emergencynum;
@@ -355,6 +356,7 @@ public final class Global {
         cachePath = FilePath + "/Cache";
         savedPath = FilePath + "/Saved for upload";
         downloadPath = FilePath + "/Download";
+        gqrsTempPath = RootPath + "/Temp";
         quickcheckpath = FilePath + "/Quick check";
         folder = FilePath;
         new File(RootPath).mkdir();
@@ -362,6 +364,7 @@ public final class Global {
         new File(cachePath).mkdir();
         new File(savedPath).mkdir();
         new File(downloadPath).mkdir();
+        new File(gqrsTempPath).mkdir();
         new File(quickcheckpath).mkdir();
     }
 

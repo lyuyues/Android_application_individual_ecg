@@ -7,11 +7,14 @@ import java.io.InputStream;
 import android.app.Activity;
 import android.app.ProgressDialog;
 import android.os.Bundle;
+import android.os.Handler;
 import android.view.MenuItem;
 import android.view.ViewGroup.LayoutParams;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import ca.uvic.ece.ecg.ECG.DataFilter;
+import ca.uvic.ece.ecg.ECG.GqrsProcess;
 
 /**
  * This Activity plots selected ECG data
@@ -24,6 +27,9 @@ public class DataManagePlot extends Activity {
 
     private DataFilter dataFilter1 = new DataFilter();
     private DataFilter dataFilter2 = new DataFilter();
+
+    private Handler handler = new Handler();
+    private TextView textViewHeartRate;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,6 +50,8 @@ public class DataManagePlot extends Activity {
         ecgChart2.addToLayout((LinearLayout) findViewById(R.id.chart2),
                 new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
+        textViewHeartRate = (TextView) this.findViewById(R.id.textView_HR);
+
         readFromFile(getIntent().getStringExtra("fileName"));
     }
 
@@ -62,30 +70,57 @@ public class DataManagePlot extends Activity {
         new Thread() {
             @Override
             public void run() {
+                int length = 0;
                 byte[] data = new byte[5];
-                InputStream insputStream = null;
+                InputStream inputStream = null;
                 try {
-                    insputStream = new FileInputStream(new File(fileName));
+                    inputStream = new FileInputStream(new File(fileName));
 
-                    while (insputStream.read(data) != -1) {
+                    while (inputStream.read(data) != -1) {
+                        length++;
                         ecgChart1.appendPointWithoutPaint(dataFilter1.dataConvert(((data[1]) << 8) | (data[2] & 0xFF)) / 2);
-                        ecgChart2.appendPointWithoutPaint(dataFilter2.dataConvert(((data[3]) << 8) | (data[4] & 0xFF)) / 2);
+                        ecgChart2.appendPointWithoutPaint(dataFilter2.dataConvert(((data[3] & 0x0f) << 8) | (data[4] & 0xFF)) / 2);
                     }
                 } catch (Exception ignore) {
                 } finally {
                     ecgChart1.repaint();
                     ecgChart2.repaint();
 
-                    dialog.dismiss();
-
-                    if (insputStream != null) {
+                    if (inputStream != null) {
                         try {
-                            insputStream.close();
+                            inputStream.close();
+                            inputStream = null;
                         } catch (Exception ignore) {
                         }
                     }
                 }
+
+                try {
+                    data = new byte[length * 5];
+                    inputStream = new FileInputStream(new File(fileName));
+                    inputStream.read(data);
+
+                    setBpm(GqrsProcess.gqrsProcess(data));
+                } catch (Exception ignore) {
+                } finally {
+                    if (inputStream != null) {
+                        try {
+                            inputStream.close();
+                        } catch (Exception ignore) {
+                        }
+                    }
+                }
+
+                dialog.dismiss();
             }
         }.start();
+    }
+
+    private void setBpm(final int bpm) {
+        handler.post(new Runnable() {
+            public void run() {
+                textViewHeartRate.setText(bpm + " bpm");
+            }
+        });
     }
 }
