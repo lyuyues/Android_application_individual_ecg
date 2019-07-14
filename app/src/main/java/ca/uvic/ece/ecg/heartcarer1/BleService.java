@@ -16,6 +16,7 @@ import java.util.TimerTask;
 import java.util.UUID;
 
 import ca.uvic.ece.ecg.ECG.AveCC;
+import ca.uvic.ece.ecg.ECG.GqrsProcess;
 import ca.uvic.ece.ecg.ECG.HR_FFT;
 import ca.uvic.ece.ecg.ECG.HR_detect;
 import ca.uvic.ece.ecg.ECG.MADetect1;
@@ -37,6 +38,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -44,6 +46,8 @@ import android.os.Message;
 import android.os.Messenger;
 import android.os.Vibrator;
 import android.util.Log;
+
+import com.google.common.collect.EvictingQueue;
 
 //This Service runs after logging in and ends when exiting app
 @SuppressLint("HandlerLeak")
@@ -77,7 +81,10 @@ public class BleService extends Service {
     private byte[] buffer = new byte[buf_length];
     private final int buf_hr_length = 3750;
     private double[] buffer_HR = new double[buf_hr_length];
+    private EvictingQueue<Byte> gqrsHRQueue = EvictingQueue.create(buf_hr_length * 5 * 4);
+    private byte[] bufferHRGqrsInThread = new byte[0];
     private List<Double> buffer_HR_list = new ArrayList<Double>();
+    private List<Double> buffer_HR_list_thread = new ArrayList<Double>();
     private int pointer_HR = 0;
     private int pointerBuf = 0;
     private OutputStream output;
@@ -419,17 +426,27 @@ public class BleService extends Service {
                     multiValue[i] = multiValue[i] << 8;
                     multiValue[i] += (notiValue[index++] & 0xFF);
 
-                    multiValue[i + 1] = notiValue[index++];
+                    multiValue[i + 1] = (notiValue[index++] & 0x0F);
                     multiValue[i + 1] = (multiValue[i + 1] << 8);
                     multiValue[i + 1] += (notiValue[index++] & 0xFF);
 
                     buffer_HR[pointer_HR] = multiValue[i + 1];
+
+                    int j = i * 5 / 2;
+                    gqrsHRQueue.offer(notiValue[j]);
+                    gqrsHRQueue.offer(notiValue[j + 1]);
+                    gqrsHRQueue.offer(notiValue[j + 2]);
+                    gqrsHRQueue.offer(notiValue[j + 3]);
+                    gqrsHRQueue.offer(notiValue[j + 4]);
+
                     buffer_HR_list.add(multiValue[i + 1] + 0.0);
                     pointer_HR++;
                     if (pointer_HR == buf_hr_length - 1) {
-                        pointer_HR = 0;
                         showHeartBeat();
-                        showVTVF();
+//                        showVTVF();
+
+                        buffer_HR_list.clear();
+                        pointer_HR = 0;
                     }
                 }
 
@@ -443,8 +460,6 @@ public class BleService extends Service {
     /**
      * Calculate Heart Beat
      *
-     * @param i:
-     *            Which buffer to calculate Heart Beat, i = 1 or 2
      */
     private void showVTVF() {
         int bpm = hr.getHR(buffer_HR);
@@ -490,23 +505,34 @@ public class BleService extends Service {
     }
 
     private void showHeartBeat() {
-        int bpm = -1;
-        boolean result = hrd.begin(buffer_HR_list);
-        if (!result) {
-            System.out.println("Detection failure");
-        } else {
-            bpm = (int) hrd.getHR();
-        }
-        hrd.reset();
+        buffer_HR_list_thread.addAll(buffer_HR_list);
 
-        updateBeat(bpm);
-        if (bpm > 0 && bpm < Global.lowBpm && ifHbNormal) {
-            showNotification();
-            ifHbNormal = false;
-        }
-        if (bpm >= 60)
-            ifHbNormal = true;
-        buffer_HR_list.clear();
+        if (bufferHRGqrsInThread.length != gqrsHRQueue.size())
+            bufferHRGqrsInThread = new byte[gqrsHRQueue.size()];
+        int i = 0;
+        for (Byte b : gqrsHRQueue)
+            bufferHRGqrsInThread[i++] = b;
+
+        AsyncTask.execute(new Runnable() {
+            @Override
+            public void run() {
+                int bpm = -1;
+                if (hrd.begin(buffer_HR_list_thread)) {
+                    bpm = (int) hrd.getHR();
+                }
+                buffer_HR_list_thread.clear();
+                hrd.reset();
+
+                int bpmGqrs = -1;
+                try {
+                    bpmGqrs = GqrsProcess.gqrsProcess(bufferHRGqrsInThread);
+                } catch (Exception ignore) {
+                }
+
+                updateBeat(bpm, bpmGqrs);
+                ifHbNormal = !ifHbNormal || bpmGqrs >= Global.lowBpm;
+            }
+        });
     }
 
     Handler handler = new Handler() {
@@ -522,8 +548,8 @@ public class BleService extends Service {
      * @param bpm:
      *            Heart Beat to show in integer
      */
-    private void updateBeat(int bpm) {
-        sendVoidToAM(STATE_UPDATE_BPM, bpm);
+    private void updateBeat(int bpm, int bpmGqrs) {
+        sendVoidToAM(STATE_UPDATE_BPM, new int[]{bpm, bpmGqrs});
 
         // Update widget
         sendBroadcast(new Intent(Global.WidgetAction).putExtra("bpm", bpm));

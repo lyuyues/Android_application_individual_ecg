@@ -56,7 +56,7 @@ public class HrmFragment extends Fragment {
     private String filename;
     private ProgressDialog proDlg;
 
-    private int bpm = 0, vtvf = -1;
+    private int bpm = 0, bpmGqrs = 0, vtvf = -1;
 
     private static final int REQUEST_CODE_BLE_FOR_DEVICE_PICKER = 0;
     private static final int REQUEST_CODE_BLE_FOR_CONNECT = 1;
@@ -461,7 +461,9 @@ public class HrmFragment extends Fragment {
                 Global.quick_testing = false;
             }
         } else if (i == BleService.STATE_UPDATE_BPM) {
-            bpm = msg.getData().getInt("data");
+            int[] data = msg.getData().getIntArray("data");
+            bpm = data[0];
+            bpmGqrs = data[1];
         } else if (i == BleService.STATE_UPDATE_VTVF) {
             vtvf = msg.getData().getInt("data");
         }
@@ -510,7 +512,7 @@ public class HrmFragment extends Fragment {
             }
         }
 
-        textviewHeartRate.setText(bpm + " bpm");
+        textviewHeartRate.setText(bpm + "/" + bpmGqrs + " bpm");
         textviewVtvf.setText(vtvf == -1 ? "" : "VT/VF");
     }
 
