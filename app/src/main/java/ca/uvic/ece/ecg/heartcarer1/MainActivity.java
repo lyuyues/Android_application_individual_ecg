@@ -51,7 +51,8 @@ public class MainActivity extends Activity implements HrmFragment.sendVoidToSMLi
     private Messenger ServiceMessenger;
     private boolean ifBackPressed = false;
     private Menu myMenu;
-
+    private BleReceiver bleReceiver;
+    private NetworkStateReceiver networkStateReceiver;
     private ArrayList<Integer> menuItemList = new ArrayList<Integer>();
     private boolean isNewFragment = false;
     private Handler mHandler = new Handler();
@@ -117,6 +118,18 @@ public class MainActivity extends Activity implements HrmFragment.sendVoidToSMLi
                         + "!");
         Memory_Managemnt_Util memory = new Memory_Managemnt_Util();
         memory.Memory_management();
+
+        // Bluetooth states change listener
+        bleReceiver = new BleReceiver(MainActivity.this);
+        IntentFilter bleFilter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
+        bleFilter.addAction(Intent.ACTION_AIRPLANE_MODE_CHANGED);
+        this.registerReceiver(bleReceiver, bleFilter);
+
+        networkStateReceiver = new NetworkStateReceiver();
+        IntentFilter networkFilter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
+        networkFilter.addAction(Intent.ACTION_AIRPLANE_MODE_CHANGED);
+        this.registerReceiver(networkStateReceiver, networkFilter);
+
     }
 
     private void initTitles() {
@@ -369,6 +382,8 @@ public class MainActivity extends Activity implements HrmFragment.sendVoidToSMLi
         super.onDestroy();
         Log.i(TAG, "onDestroy()");
 
+        this.unregisterReceiver(bleReceiver);
+        this.unregisterReceiver(networkStateReceiver);
         Global.toastMakeText(MainActivity.this, getResources().getString(R.string.main_thank)
                 + getResources().getString(R.string.app_name) + getResources().getString(R.string.excla));
         unbindService(mConn);
