@@ -245,7 +245,7 @@ public class HrmFragment extends Fragment {
             }
 
             if (BleService.ConState == BleService.ConState_Connected) {
-                disconncetBle();
+                disconnectBle();
                 return;
             }
 
@@ -263,7 +263,7 @@ public class HrmFragment extends Fragment {
         mSendToSMListener.sendVoidToSM(1);
     }
 
-    private void disconncetBle() {
+    private void disconnectBle() {
         buttonConState.setText(getResources().getString(R.string.hrm_disconnecting));
         buttonConState.setClickable(false);
 
@@ -438,9 +438,15 @@ public class HrmFragment extends Fragment {
         int i = msg.what;
         if (i == BleService.STATE_MULTI_VAL) {
             handleMsgByChart(msg);
+        } else if (i == BleService.STATE_CONNECTING) {
+            setMenuSensorInfoEnabled(false);
+            connectBle();
         } else if (i == BleService.STATE_CONNECTED) {
             setMenuSensorInfoEnabled(true);
             Global.toastMakeText(getActivity(), getResources().getString(R.string.global_sensor) + " connected!");
+        } else if (i == BleService.STATE_DISCONNECTING) {
+            setMenuSensorInfoEnabled(false);
+            disconnectBle();
         } else if (i == BleService.STATE_DISCONNECTED) {
             setMenuSensorInfoEnabled(false);
             Global.toastMakeText(getActivity(), "Disconnected!");
@@ -467,8 +473,7 @@ public class HrmFragment extends Fragment {
         } else if (i == BleService.STATE_UPDATE_VTVF) {
             vtvf = msg.getData().getInt("data");
         }
-        if (i != BleService.STATE_MULTI_VAL)
-            refreshViews();
+        refreshViews();
     }
 
     private void handleMsgByChart(Message msg) {

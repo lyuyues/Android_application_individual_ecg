@@ -23,6 +23,7 @@ import ca.uvic.ece.ecg.ECG.MADetect1;
 
 import android.annotation.SuppressLint;
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
@@ -39,6 +40,7 @@ import android.content.IntentFilter;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -59,13 +61,15 @@ public class BleService extends Service {
     public static final int ConState_Connecting = 2;
 
     public static final int STATE_REGISTERED = 1;
-    public static final int STATE_CONNECTED = 2;
-    public static final int STATE_DISCONNECTED = 3;
-    public static final int STATE_START_SAVING = 4;
-    public static final int STATE_STOP_SAVING = 5;
-    public static final int STATE_UPDATE_BPM = 6;
-    public static final int STATE_UPDATE_VTVF = 7;
-    public static final int STATE_MULTI_VAL = 8;
+    public static final int STATE_CONNECTING = 2;
+    public static final int STATE_CONNECTED = 3;
+    public static final int STATE_DISCONNECTING = 4;
+    public static final int STATE_DISCONNECTED = 5;
+    public static final int STATE_START_SAVING = 6;
+    public static final int STATE_STOP_SAVING = 7;
+    public static final int STATE_UPDATE_BPM = 8;
+    public static final int STATE_UPDATE_VTVF = 9;
+    public static final int STATE_MULTI_VAL = 10;
 
     public static boolean enableNoti;
     public static boolean ifDraw;
@@ -131,7 +135,15 @@ public class BleService extends Service {
 
     // Show foreground notification
     private void StartForeground() {
-        Notification noti = new Notification.Builder(BleService.this)
+        Notification.Builder builder;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            createNotificationChannel();
+            builder = new Notification.Builder(BleService.this, Global.CHANNEL_ID);
+        } else {
+            builder = new Notification.Builder(BleService.this);
+        }
+
+        Notification noti = builder
                 .setContentIntent(PendingIntent.getActivity(BleService.this, 0, Global.defaultIntent(BleService.this), 0))
                 .setContentTitle(getResources().getString(R.string.app_name))
                 .setContentText(getResources().getString(R.string.app_name) + getResources().getString(R.string.ble_run))
@@ -181,9 +193,10 @@ public class BleService extends Service {
         Log.i(TAG, "connect, ConState = " + ConState);
         if (ConState == ConState_Connected)
             return;
-
-        ConState = ConState_Connecting;
-        mBluetoothGatt = mDevice.connectGatt(BleService.this, false, mGattCallback);
+        if (mDevice != null) {
+            ConState = ConState_Connecting;
+            mBluetoothGatt = mDevice.connectGatt(BleService.this, false, mGattCallback);
+        }
     }
 
     private synchronized void reconnect() {
@@ -638,5 +651,24 @@ public class BleService extends Service {
                 Global.toastMakeText(BleService.this, string);
             }
         });
+    }
+
+    private void createNotificationChannel() {
+        // Create the NotificationChannel, but only on API 26+ because
+        // the NotificationChannel class is new and not in the support library
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            CharSequence name = "Heart Care";
+            String description = "Heart Carer Background Service.";
+            int importance = NotificationManager.IMPORTANCE_HIGH;
+            NotificationChannel channel = new NotificationChannel(Global.CHANNEL_ID, name, importance);
+            channel.setDescription(description);
+            channel.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
+
+            // Register the channel with the system; you can't change the importance
+            // or other notification behaviors after this
+            NotificationManager notificationManager = getSystemService(NotificationManager.class);
+            assert(null != notificationManager);
+            notificationManager.createNotificationChannel(channel);
+        }
     }
 }
