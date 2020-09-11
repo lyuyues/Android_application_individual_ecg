@@ -1,6 +1,6 @@
 package ca.uvic.ece.ecg.heartcarer1;
 
-import android.app.Fragment;
+import androidx.fragment.app.Fragment;
 import android.os.Bundle;
 import android.os.Message;
 import android.view.LayoutInflater;

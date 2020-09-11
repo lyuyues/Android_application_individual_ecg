@@ -1,21 +1,22 @@
 package ca.uvic.ece.ecg.heartcarer1;
 
-import android.app.Fragment;
+import androidx.fragment.app.Fragment;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.ViewGroup;
+import androidx.fragment.app.FragmentManager;
 
 public class SettingFragment extends Fragment {
-	private static android.app.FragmentManager fMgr; 
+	private static FragmentManager fMgr;
 	private View view;
 	@Override
 	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState){
 		fMgr = getChildFragmentManager();
 
 		view = inflater.inflate(R.layout.activity_main1, container, false);	
-		Fragment ProfileSettingFragment=new ProfileSettingFragment();
+		Fragment ProfileSettingFragment = new ProfileSettingFragment();
 		getFragmentManager().beginTransaction().replace(R.id.fragmentRoot, ProfileSettingFragment, "ProfileSettingFragment").commit();					
 
 			dealBottomButtonsClickEvent();
