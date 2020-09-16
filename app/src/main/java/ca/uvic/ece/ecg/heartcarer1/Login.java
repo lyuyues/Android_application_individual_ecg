@@ -49,7 +49,7 @@ public class Login extends Activity {
 	private CheckBox checkbox_remember;
 	private String webResult;
 	private ProgressDialog proDialog;
-	private SharedPreferences share;
+	public static SharedPreferences share;
 	private boolean ifBackPressed = false;
 	private Handler mHandler = new Handler();
 	private final Runnable mRunnable = new Runnable(){
@@ -89,6 +89,7 @@ public class Login extends Activity {
         //Get current app version and check for update if Wifi is connected
         Global.curVer = getResources().getString(R.string.app_versionName);
         if(Global.isWifiConn(Login.this)) checkForUpdate();
+		Global.setLogin(Login.this);
 	}
     
     
@@ -137,111 +138,119 @@ public class Login extends Activity {
 	//Log in using Username and Password
 	private OnClickListener loginListener = new OnClickListener(){
     	public void onClick(View v){
-    		final String userName = edittext_username.getText().toString();
-    		Global.username=userName;
-    		final String passWord = edittext_password.getText().toString();
-    		share.edit().putString(Global.shareUsername, userName).commit();
-    		share.edit().putString(Global.sharePassword, 
-    				checkbox_remember.isChecked() ? passWord : "").commit();
-    		if(!Global.isNetworkConn(Login.this)){
-    			Global.toastMakeText(Login.this, getResources().getString(R.string.nointernet));
-    			return;
-    		}
-    		if(userName.length()==0 || userName.length()>15){
-    			Global.toastMakeText(Login.this, getResources().getString(R.string.login_length_un) + "1-15 !");
-    			return;
-    		}
-    		if(passWord.length()==0 || passWord.length()>15){
-    			Global.toastMakeText(Login.this, getResources().getString(R.string.login_length_pw) + "1-20 !");
-    			return;
-    		}
-    		proDialog = ProgressDialog.show(Login.this, getResources().getString(R.string.login_logging), "", true, false);
-    	    new Thread(){
-    	    	public void run(){
-    	    		webResult = getResources().getString(R.string.noresponse);
-    	    		String url = Global.WebServiceUrl + "/login/";
-    	        	HttpParams hPara = new BasicHttpParams();
-    	            HttpConnectionParams.setConnectionTimeout(hPara, Global.connectionTimeout);
-    	            HttpConnectionParams.setSoTimeout(hPara, Global.socketTimeout);
-    	            HttpClient hClient = new DefaultHttpClient(hPara);
-    	            HttpResponse response = null;
-    	            HttpPost httppost = new HttpPost(url);
-    	            try {
-    	            	JSONObject paraOut = new JSONObject();
-    	            	paraOut.put("username", userName);
-    	                paraOut.put("password", passWord);
-    	                paraOut = Global.loginGeneral(paraOut, Login.this);
-    	                StringEntity se = new StringEntity(paraOut.toString());
-    	                se.setContentType(new BasicHeader(HTTP.CONTENT_TYPE, "application/json"));
-    	                httppost.setEntity(se);
-    	    			response = hClient.execute(httppost);
-    	                if(response != null){
-    	                	StringBuilder total = new StringBuilder();
-    	                	BufferedReader rd = new BufferedReader(new InputStreamReader(response.getEntity().getContent()));
-    	                	 String line;
-    	                	while((line = rd.readLine())!= null){
-    	                        total.append(line);
-    	                    }
-    	                	JSONObject jso = new JSONObject(total.toString());
-    	                	webResult = jso.getString("result");
-    	                	if(webResult.equals("Success: Login!")){
-    	                		Global.Dynamic_id=jso.getString("Dynamic_id");
-    	                		String url1 = Global.WebServiceUrl + "/get_doclist/";
-    	    			    	HttpParams hPara1 = new BasicHttpParams();
-    	    			        HttpConnectionParams.setConnectionTimeout(hPara1, Global.connectionTimeout);
-    	    			        HttpConnectionParams.setSoTimeout(hPara1, Global.socketTimeout);
-    	    			        HttpClient hClient1 = new DefaultHttpClient(hPara1);
-    	    			        HttpResponse response1 = null;
-    	    			        HttpPost httppost1 = new HttpPost(url1);
-    	    			        try {
-    	    			        	JSONObject paraOut1 = new JSONObject();
-    	    			        	paraOut1.put("Dynamic_id", Global.Dynamic_id);
-    	    			        	paraOut1.put("WHORU", 1);
-    	    			            StringEntity se1 = new StringEntity(paraOut1.toString());
-    	    			            se1.setContentType(new BasicHeader(HTTP.CONTENT_TYPE, "application/json"));
-    	    			            httppost1.setEntity(se1);
-    	    						response1 = hClient1.execute(httppost1);
-    	    			            if(response1 != null){
-    	    			            	StringBuilder total1 = new StringBuilder();
-    	    			            	BufferedReader rd1 = new BufferedReader(new InputStreamReader(response1.getEntity().getContent()));
-    	    			            	String line1;
-    	    			            	while((line1 = rd1.readLine()) != null){
-    	    			                    total1.append(line1);
-    	    			                }
-    	    			            	JSONObject jso1 = new JSONObject(total1.toString());
-    	    			            	int doctor_num = jso1.getInt("doctor_num");
-    	    			            	int access_request = jso1.getInt("access_request");
-    	    			                Global.doctor_num=doctor_num;
-    	    			                Global.access_request_doc=access_request;
-    	    			            	for (int n=1;n<=doctor_num;n++){
-    	    			        			Global.doctor_name[n]=jso1.getString("doctor"+n);
-    	    			        		}
-    	    			            	for (int n=1;n<=access_request;n++){
-    	    			            		Global.access_request_name[n]=jso1.getString("doctor_request"+n);
-    	    			        		}
-    	    				    }}
-    	    			            catch (Exception e) {
-    	    			    			e.printStackTrace();
-    	    			    		}
-    	                		Global.initRegUser(jso);
-    	    	    			Intent intent= new Intent(Login.this, MainActivity.class);
-    	    	    			intent.putExtra("userName", userName);
-    	    	        		startActivity(intent);
-    	    	        		proDialog.dismiss();
-    	    	        		finish();
-    	                	}else{
-    	                		handler.sendEmptyMessage(0);
-    	                	}
-    	                }
-    	    		} catch (Exception e) {
-    	    			e.printStackTrace();
-    	    			handler.sendEmptyMessage(0);
-    	    		}
-                	proDialog.dismiss();
-    	    	}
-    	    }.start();
+			login();
     	}
     };
+
+    protected void login() {
+		final String userName = edittext_username.getText().toString();
+		final String passWord = edittext_password.getText().toString();
+		Global.username=userName;
+		share.edit().putString(Global.shareUsername, userName).apply();
+		share.edit().putString(Global.sharePassword,
+				checkbox_remember.isChecked() ? passWord : "").apply();
+		if(!Global.isNetworkConn(Login.this)){
+			Global.toastMakeText(Login.this, getResources().getString(R.string.nointernet));
+			return;
+		}
+		if(userName.length()==0 || userName.length()>15){
+			Global.toastMakeText(Login.this, getResources().getString(R.string.login_length_un) + "1-15 !");
+			return;
+		}
+		if(passWord.length()==0 || passWord.length()>15){
+			Global.toastMakeText(Login.this, getResources().getString(R.string.login_length_pw) + "1-20 !");
+			return;
+		}
+		proDialog = ProgressDialog.show(this, getResources().getString(R.string.login_logging), "", true, false);
+		new Thread(){
+			public void run(){
+				webResult = getResources().getString(R.string.noresponse);
+				String url = Global.WebServiceUrl + "/login/";
+				HttpParams hPara = new BasicHttpParams();
+				HttpConnectionParams.setConnectionTimeout(hPara, Global.connectionTimeout);
+				HttpConnectionParams.setSoTimeout(hPara, Global.socketTimeout);
+				HttpClient hClient = new DefaultHttpClient(hPara);
+				HttpResponse response = null;
+				HttpPost httppost = new HttpPost(url);
+				try {
+					JSONObject paraOut = new JSONObject();
+					paraOut.put("username", userName);
+					paraOut.put("password", passWord);
+					paraOut = Global.loginGeneral(paraOut, Login.this);
+					StringEntity se = new StringEntity(paraOut.toString());
+					se.setContentType(new BasicHeader(HTTP.CONTENT_TYPE, "application/json"));
+					httppost.setEntity(se);
+					response = hClient.execute(httppost);
+					if(response != null){
+						StringBuilder total = new StringBuilder();
+						BufferedReader rd = new BufferedReader(new InputStreamReader(response.getEntity().getContent()));
+						String line;
+						while((line = rd.readLine())!= null){
+							total.append(line);
+						}
+						JSONObject jso = new JSONObject(total.toString());
+						webResult = jso.getString("result");
+
+						if(webResult.equals("Success: Login!")){
+							Global.Dynamic_id=jso.getString("Dynamic_id");
+							String url1 = Global.WebServiceUrl + "/get_doclist/";
+							HttpParams hPara1 = new BasicHttpParams();
+							HttpConnectionParams.setConnectionTimeout(hPara1, Global.connectionTimeout);
+							HttpConnectionParams.setSoTimeout(hPara1, Global.socketTimeout);
+							HttpClient hClient1 = new DefaultHttpClient(hPara1);
+							HttpResponse response1 = null;
+							HttpPost httppost1 = new HttpPost(url1);
+							try {
+								JSONObject paraOut1 = new JSONObject();
+								paraOut1.put("Dynamic_id", Global.Dynamic_id);
+								paraOut1.put("WHORU", 1);
+								StringEntity se1 = new StringEntity(paraOut1.toString());
+								se1.setContentType(new BasicHeader(HTTP.CONTENT_TYPE, "application/json"));
+								httppost1.setEntity(se1);
+								response1 = hClient1.execute(httppost1);
+								if(response1 != null){
+									StringBuilder total1 = new StringBuilder();
+									BufferedReader rd1 = new BufferedReader(new InputStreamReader(response1.getEntity().getContent()));
+									String line1;
+									while((line1 = rd1.readLine()) != null){
+										total1.append(line1);
+									}
+									JSONObject jso1 = new JSONObject(total1.toString());
+									int doctor_num = jso1.getInt("doctor_num");
+									int access_request = jso1.getInt("access_request");
+									Global.doctor_num=doctor_num;
+									Global.access_request_doc=access_request;
+									for (int n=1;n<=doctor_num;n++){
+										Global.doctor_name[n]=jso1.getString("doctor"+n);
+									}
+									for (int n=1;n<=access_request;n++){
+										Global.access_request_name[n]=jso1.getString("doctor_request"+n);
+									}
+								}}
+							catch (Exception e) {
+								e.printStackTrace();
+							}
+							Log.i(TAG, "logging");
+							Global.initRegUser(jso);
+							Intent intent= new Intent(Login.this, MainActivity.class);
+							intent.putExtra("userName", userName);
+							startActivity(intent);
+							MainActivity.updateAdapter();
+							proDialog.dismiss();
+							finish();
+						}else{
+							handler.sendEmptyMessage(0);
+						}
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
+					handler.sendEmptyMessage(0);
+				}
+				proDialog.dismiss();
+			}
+		}.start();
+	}
+
     //Handler to handle incoming message
     private Handler handler = new Handler(){
     	public void handleMessage(Message msg){

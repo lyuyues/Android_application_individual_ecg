@@ -112,6 +112,7 @@ public final class Global {
     public static String testtime;
     public static Filter_Queue Q = new Filter_Queue();
     public static int max_memory;
+    private static Login mLogin;
 
     /**
      * Check if network is available
@@ -375,4 +376,29 @@ public final class Global {
     public static double getYAxisMax() {
         return 0 == Global.Channel_selection ? yAxis_Max_Channel1 : yAxis_Max_Channel2;
     }
+
+    static boolean isLogin() {
+        return !TextUtils.isEmpty(Global.Dynamic_id);
+    }
+
+    public static void setLogin(Login login) {
+        mLogin = login;
+    }
+
+    /**
+     * Automatically re-login using Username and Password
+     */
+    public static void relogin() {
+        // If User has login once, then get the information of user-name and password for relogin
+        if (null != Login.share.getString(Global.shareUsername, null) && null != Login.share.getString(Global.sharePassword, null)) {
+            mLogin.login();
+        }
+    }
+
+
+    public static void logout() {
+        Dynamic_id = "";
+        MainActivity.updateAdapter();
+    }
+
 }
