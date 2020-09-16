@@ -3,18 +3,20 @@ package ca.uvic.ece.ecg.heartcarer1;
 import java.util.ArrayList;
 
 import android.annotation.SuppressLint;
-import android.app.Activity;
+import android.app.ActionBar;
 import androidx.fragment.app.Fragment;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.net.ConnectivityManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -40,13 +42,17 @@ import android.widget.TextView;
  * This Activity is the main Activity after logging in (or with no account)
  */
 @SuppressLint("HandlerLeak")
-public class MainActivity extends Activity implements HrmFragment.sendVoidToSMListener {
+public class MainActivity extends FragmentActivity implements HrmFragment.sendVoidToSMListener {
     private final String TAG = "MainActivity";
     private DrawerLayout mDrawerLayout;
     private ListView mDrawerList;
     private ActionBarDrawerToggle mDrawerToggle;
     private String[] mTitles = new String[6];
-    private int curDrawerPos = 0;
+    private int[] mIconIds = new int[6];
+    private Bitmap[] mIcons = new Bitmap[6];
+    private int[] menuIds = new int[6];
+    private int[] menuIdsNotLogin = new int[3];
+    private int curDrawerPos = -1;
     public static BluetoothAdapter mBluetoothAdapter;
     private Messenger ServiceMessenger;
     private boolean ifBackPressed = false;
@@ -54,8 +60,9 @@ public class MainActivity extends Activity implements HrmFragment.sendVoidToSMLi
     private BleReceiver bleReceiver;
     private NetworkStateReceiver networkStateReceiver;
     private ArrayList<Integer> menuItemList = new ArrayList<Integer>();
-    private boolean isNewFragment = false;
     private Handler mHandler = new Handler();
+    private static BaseAdapter mListAdapter;
+    private ActionBar mActionBar;
     private final Runnable mRunnable = new Runnable() {
         @Override
         public void run() {
@@ -71,47 +78,49 @@ public class MainActivity extends Activity implements HrmFragment.sendVoidToSMLi
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Log.i(TAG, "onCreate()");
+        Global.initiate(MainActivity.this);
         setContentView(R.layout.main_activity);
+        initTitlesAndIcons();
+
+        // Pre-fill the userName text view
         final String userName = getIntent().getStringExtra("userName");
-        initTitles();
+
+        // Get navigation bar
+        mActionBar = getActionBar();
+        assert (null != mActionBar);
+        mActionBar.setDisplayHomeAsUpEnabled(true);
+        mActionBar.setHomeButtonEnabled(true);
+
+        // "Drawer" view to be pulled out fro left edge of the window
         mDrawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
-        mDrawerList = (ListView) findViewById(R.id.left_drawer);
-        mDrawerList.setAdapter(new MyListAdapter(this, mTitles));
-        mDrawerList.setOnItemClickListener(new DrawerItemClickListener());
-        getActionBar().setDisplayHomeAsUpEnabled(true);
-        getActionBar().setHomeButtonEnabled(true);
+        // Tie together the functionality of DrawerLayout and the framework ActionBar to implement the recommended design for navigation drawers.
         mDrawerToggle = new ActionBarDrawerToggle(MainActivity.this, mDrawerLayout, R.drawable.ic_drawer,
                 R.string.drawer_open, R.string.drawer_close) {
             public void onDrawerClosed(View drawerView) {
-                setTitle(mTitles[curDrawerPos]);
-                if (!isNewFragment) {
-                    for (int i : menuItemList) {
-                        myMenu.getItem(i).setVisible(true);
-                    }
-                } else {
-                    isNewFragment = false;
-                }
+                setTitleAndIcon(getPosition(curDrawerPos));
+                for (int i = 0; i < myMenu.size(); i++)
+                    myMenu.getItem(i).setVisible(true);
             }
 
             public void onDrawerOpened(View drawerView) {
-                setTitle(getResources().getString(R.string.app_name_title)
-                        + (userName.equals("") ? "" : (" - " + userName)));
-                menuItemList.clear();
-                for (int i = 0; i < myMenu.size(); i++) {
-                    if (myMenu.getItem(i).isVisible()) {
-                        myMenu.getItem(i).setVisible(false);
-                        menuItemList.add(i);
-                    }
-                }
+                setTitleAndIcon(-1);
+                for (int i = 0; i < myMenu.size(); i++)
+                    myMenu.getItem(i).setVisible(false);
             }
         };
-        mDrawerLayout.setDrawerListener(mDrawerToggle);
-        if (savedInstanceState == null) {
-            selectItem(0, true);
-        }
+        mDrawerLayout.addDrawerListener(mDrawerToggle);
+
+        mDrawerList = findViewById(R.id.left_drawer);
+        mDrawerList.setAdapter(mListAdapter = new MyListAdapter(this));
+        mDrawerList.setOnItemClickListener((parent, view, position, id) -> selectItem(position));
+
+        selectItem(0);
+        setTitleAndIcon(0);
+
         bindService(new Intent(MainActivity.this, BleService.class), mConn, Context.BIND_AUTO_CREATE);
         startService(new Intent(MainActivity.this, BleService.class));
         mBluetoothAdapter = ((BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE)).getAdapter();
+        assert userName != null;
         Global.toastMakeText(MainActivity.this,
                 getResources().getString(R.string.main_hi) + (userName.equals("") ? "" : (" " + userName))
                         + getResources().getString(R.string.main_welcome) + getResources().getString(R.string.app_name)
@@ -129,16 +138,6 @@ public class MainActivity extends Activity implements HrmFragment.sendVoidToSMLi
         IntentFilter networkFilter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
         networkFilter.addAction(Intent.ACTION_AIRPLANE_MODE_CHANGED);
         this.registerReceiver(networkStateReceiver, networkFilter);
-
-    }
-
-    private void initTitles() {
-        mTitles[0] = getResources().getString(R.string.main_hrm);
-        mTitles[1] = getResources().getString(R.string.main_data);
-        mTitles[2] = getResources().getString(R.string.main_settings);
-        mTitles[3] = getResources().getString(R.string.main_about);
-        mTitles[4] = getResources().getString(R.string.main_mydoctors);
-        mTitles[5] = getResources().getString(R.string.main_exit);
 
     }
 
@@ -175,68 +174,89 @@ public class MainActivity extends Activity implements HrmFragment.sendVoidToSMLi
         }
     }
 
-    // Forward received Message from BleService to HrmFragment
-    private class IncomingHandler extends Handler {
-        public void handleMessage(Message msg) {
-            getFragmentManager().executePendingTransactions();
-            HrmFragment hrmFrag = (HrmFragment) getFragmentManager()
-                    .findFragmentByTag(getResources().getString(R.string.main_hrm));
-            if (hrmFrag != null)
-                hrmFrag.handleMainActivityMes(msg);
-        }
-    }
+    /**
+     * Initiate menu list's titles and icons
+     */
+    private void initTitlesAndIcons() {
+        Resources res = MainActivity.this.getResources();
 
-    // Set the title and icon of ActionBar
-    public void setTitle(CharSequence title) {
-        getActionBar().setTitle(title);
-        int tmp = R.drawable.main_heart_beat_64;
-        if (title.equals(mTitles[0]))
-            tmp = R.drawable.hrmonitor_64;
-        else if (title.equals(mTitles[1]))
-            tmp = R.drawable.clouddata_128;
-        else if (title.equals(mTitles[2]))
-            tmp = R.drawable.setting_128;
-        else if (title.equals(mTitles[3]))
-            tmp = R.drawable.about_64;
-        else if (title.equals(mTitles[4]))
-            tmp = R.drawable.doctor;
-        getActionBar().setIcon(tmp);
+        mTitles[0] = getResources().getString(R.string.main_hrm);
+        mIconIds[0] = R.drawable.hrmonitor_64;
+        mIcons[0] = BitmapFactory.decodeResource(res, mIconIds[0]);
+
+        mTitles[1] = getResources().getString(R.string.main_data);
+        mIconIds[1] = R.drawable.clouddata_128;
+        mIcons[1] = BitmapFactory.decodeResource(res, mIconIds[1]);
+
+        mTitles[2] = getResources().getString(R.string.main_settings);
+        mIconIds[2] = R.drawable.setting_128;
+        mIcons[2] = BitmapFactory.decodeResource(res, mIconIds[2]);
+
+        mTitles[3] = getResources().getString(R.string.main_about);
+        mIconIds[3] = R.drawable.about_64;
+        mIcons[3] = BitmapFactory.decodeResource(res, mIconIds[3]);
+
+        mTitles[4] = getResources().getString(R.string.main_mydoctors);
+        mIconIds[4] = R.drawable.doctor;
+        mIcons[4] = BitmapFactory.decodeResource(res, mIconIds[4]);
+
+        mTitles[5] = getResources().getString(R.string.main_exit);
+        mIconIds[5] = R.drawable.exit_64;
+        mIcons[5] = BitmapFactory.decodeResource(res, mIconIds[5]);
+
+        //Logined menu
+        menuIds[0] = 0;
+        menuIds[1] = 1;
+        menuIds[2] = 2;
+        menuIds[3] = 3;
+        menuIds[4] = 4;
+        menuIds[5] = 5;
+
+        //non-logined menu
+        menuIdsNotLogin[0] = 0;
+        menuIdsNotLogin[1] = 3;
+        menuIdsNotLogin[2] = 5;
     }
 
     private class DrawerItemClickListener implements ListView.OnItemClickListener {
         public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-            selectItem(position, false);
+            selectItem(position);
         }
+    }
+
+    private int getPosition(int position) {
+        return !Global.isLogin() ? menuIdsNotLogin[position] : menuIds[position];
     }
 
     /**
      * Handle drawer item clicked event
-     * 
+     *  Logined: 0 : monitor, 1 : about 2: exit
+     *  non-login: 0 :monitor  1: Data management 2: Setting 3: about 4 my Doctors  5 exit
      * @param position:
      *            Position selected
-     * @param ifFirst:
-     *            If it's first to launch HrmFragment
      */
-    private void selectItem(int position, boolean ifFirst) {
-        if (ifFirst) {
-            setTitle(mTitles[position]);
-            getFragmentManager().beginTransaction().replace(R.id.content_frame, new HrmFragment(), mTitles[position])
-                    .commit();
+    private void selectItem(int position) {
+        mDrawerLayout.closeDrawer(mDrawerList);
+        if (!Global.isLogin()) {
+            if (position == 2) {
+                Global.exitDialog(MainActivity.this);
+            } else if (position != curDrawerPos) {
+                curDrawerPos = position;
+                Fragment tmp = null;
+                if (position == 1)
+                    tmp = new AboutFragment();
+                else if (position == 0)
+                    tmp = new HrmFragment();
+
+                getSupportFragmentManager().beginTransaction().replace(R.id.content_frame, tmp, mTitles[getPosition(position)]).commit();
+            }
         } else {
             if (position == 5) {
                 mDrawerLayout.closeDrawer(mDrawerList);
                 mDrawerList.setItemChecked(curDrawerPos, true);
                 Global.exitDialog(MainActivity.this);
-                return;
-            }
-            if ((!Global.ifRegUser) && (position == 1 || position == 2 || position == 4)) {
-                Global.toastMakeText(MainActivity.this, getResources().getString(R.string.avail));
-                mDrawerList.setItemChecked(curDrawerPos, true);
-                return;
-            }
-            if (position != curDrawerPos) {
+            } else if (position != curDrawerPos) {
                 curDrawerPos = position;
-                isNewFragment = true;
                 Fragment tmp = null;
                 if (position == 0)
                     tmp = new HrmFragment();
@@ -248,11 +268,10 @@ public class MainActivity extends Activity implements HrmFragment.sendVoidToSMLi
                     tmp = new AboutFragment();
                 else if (position == 4)
                     tmp = new DoctorList();
-                getFragmentManager().beginTransaction().replace(R.id.content_frame, tmp, mTitles[position]).commit();
+                getSupportFragmentManager().beginTransaction().replace(R.id.content_frame, tmp, mTitles[getPosition(position)]).commit();
             }
-            mDrawerLayout.closeDrawer(mDrawerList);
         }
-        mDrawerList.setItemChecked(position, true);
+        mDrawerList.setItemChecked(curDrawerPos, true);
     }
 
     public boolean onPrepareOptionsMenu(Menu menu) {
@@ -277,38 +296,25 @@ public class MainActivity extends Activity implements HrmFragment.sendVoidToSMLi
         return super.onOptionsItemSelected(item);
     }
 
-    // Customized ListAdapter for Drawer
+    /**
+     * Customized ListAdapter for Drawer
+     */
     private class MyListAdapter extends BaseAdapter {
-        private String[] mList;
         private LayoutInflater inflater;
-        private Bitmap BM_hrm, BM_settings, BM_data, BM_exit, BM_about, BM_DocList;
 
-        public MyListAdapter(Context context, String[] mL) {
-            mList = mL;
+        MyListAdapter(Context context) {
             inflater = LayoutInflater.from(context);
-            Resources res = context.getResources();
-            BM_hrm = BitmapFactory.decodeResource(res, R.drawable.hrmonitor_64);
-            BM_settings = BitmapFactory.decodeResource(res, R.drawable.setting_64);
-            BM_data = BitmapFactory.decodeResource(res, R.drawable.clouddata_64);
-            // BM_profile =
-            // BitmapFactory.decodeResource(res,R.drawable.personal_64);
-            // BM_noti =
-            // BitmapFactory.decodeResource(res,R.drawable.notification_64);
-            BM_exit = BitmapFactory.decodeResource(res, R.drawable.exit_64);
-            BM_about = BitmapFactory.decodeResource(res, R.drawable.about_64);
-            BM_DocList = BitmapFactory.decodeResource(res, R.drawable.doctor);
         }
-
         public int getCount() {
-            return mList.length;
+            return !Global.isLogin() ? 3 : 6;
         }
 
         public Object getItem(int position) {
-            return mList[position];
+            return mTitles[getPosition(position)];
         }
 
         public long getItemId(int position) {
-            return position;
+            return getPosition(position);
         }
 
         public View getView(int position, View convertView, ViewGroup parent) {
@@ -316,31 +322,17 @@ public class MainActivity extends Activity implements HrmFragment.sendVoidToSMLi
             if (convertView == null) {
                 convertView = inflater.inflate(R.layout.drawer_list_item, null);
                 holder = new ViewHolder();
-                holder.ll = (LinearLayout) convertView.findViewById(R.id.linearLayout1);
-                holder.icon = (ImageView) convertView.findViewById(R.id.imageView1);
-                holder.title = (TextView) convertView.findViewById(R.id.textView1);
+                holder.ll = convertView.findViewById(R.id.linearLayout1);
+                holder.icon = convertView.findViewById(R.id.imageView1);
+                holder.title = convertView.findViewById(R.id.textView1);
                 convertView.setTag(holder);
             } else {
                 holder = (ViewHolder) convertView.getTag();
             }
-            if ((!Global.ifRegUser) && (position == 1 || position == 2 || position == 4)) {
-                holder.ll.setBackgroundColor(Global.color_Grey);
-            }
-            holder.title.setText(mList[position]);
-            if (position == 0)
-                holder.icon.setImageBitmap(BM_hrm);
-            else if (position == 1)
-                holder.icon.setImageBitmap(BM_data);
-            else if (position == 2)
-                holder.icon.setImageBitmap(BM_settings);
-            // else if(position==3) holder.icon.setImageBitmap(BM_noti);
-            // else if(position==4) holder.icon.setImageBitmap(BM_general);
-            else if (position == 3)
-                holder.icon.setImageBitmap(BM_about);
-            else if (position == 4)
-                holder.icon.setImageBitmap(BM_DocList);
-            else
-                holder.icon.setImageBitmap(BM_exit);
+
+            holder.ll.setBackgroundColor(Global.color_Grey);
+            holder.title.setText(mTitles[getPosition(position)]);
+            holder.icon.setImageBitmap(mIcons[getPosition(position)]);
             return convertView;
         }
 
@@ -350,6 +342,25 @@ public class MainActivity extends Activity implements HrmFragment.sendVoidToSMLi
             private TextView title;
         }
     }
+
+    /**
+     * Update menu list view
+     */
+    public static void updateAdapter() {
+        mListAdapter.notifyDataSetChanged();
+    }
+
+    // Set the title and icon of ActionBar
+    private void setTitleAndIcon(int index) {
+        if (-1 == index) {
+            mActionBar.setTitle(getResources().getString(R.string.app_name_title));
+            mActionBar.setIcon(R.drawable.main_heart_beat_64);
+        } else {
+            mActionBar.setTitle(mTitles[index]);
+            mActionBar.setIcon(mIconIds[index]);
+        }
+    }
+
 
     @Override
     public void onBackPressed() {
@@ -384,6 +395,7 @@ public class MainActivity extends Activity implements HrmFragment.sendVoidToSMLi
 
         this.unregisterReceiver(bleReceiver);
         this.unregisterReceiver(networkStateReceiver);
+        mDrawerLayout.removeDrawerListener(mDrawerToggle);
         Global.toastMakeText(MainActivity.this, getResources().getString(R.string.main_thank)
                 + getResources().getString(R.string.app_name) + getResources().getString(R.string.excla));
         unbindService(mConn);
