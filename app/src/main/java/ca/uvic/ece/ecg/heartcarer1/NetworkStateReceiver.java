@@ -17,14 +17,14 @@ public class NetworkStateReceiver extends BroadcastReceiver {
         NetworkInfo netInfo = conMan.getActiveNetworkInfo();
         if (netInfo != null && netInfo.getType() == ConnectivityManager.TYPE_WIFI) {
             Toast.makeText(context, "Network " + netInfo.getTypeName() + " connected", Toast.LENGTH_SHORT).show();
-            Log.d(TAG, "Have Wifi Connection");
+            Log.i(TAG, "Have Wifi Connection");
             if (!Global.isLogin()) {
                 Global.relogin();
             }
         } else {
             Toast.makeText(context, "Please connect to Wifi", Toast.LENGTH_SHORT).show();
             Global.logout();
-            Log.d(TAG, "Don't have Wifi Connection");
+            Log.i(TAG, "Don't have Wifi Connection");
         }
     }
 }
