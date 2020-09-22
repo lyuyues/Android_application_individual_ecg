@@ -1,11 +1,16 @@
 package ca.uvic.ece.ecg.heartcarer1;
 
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.ListActivity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.content.Context;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
@@ -18,16 +23,22 @@ import android.widget.BaseAdapter;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
+import android.widget.Toast;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 /**
  * This ListActivity allows user to select a Heartrate Sensor
  */
 public class BleDevicePicker extends ListActivity {
     private final String TAG = "BleDevicePicker";
-    private final int SCAN_PERIOD = 10000;// 10s
+    private static final int SCAN_PERIOD = 10000;// 10s
+    private static final int AUTO_CONNECT_PERIOD = 2000;// 2s
     private boolean ifScanning = false;
     private Handler mHandler = new Handler();
     private LeDeviceListAdapter mLeDeviceListAdapter;
+    private Date requestPermissionTime;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -105,6 +116,8 @@ public class BleDevicePicker extends ListActivity {
 
     // Scan BLE devices
     private void scanLeDevice() {
+        if (!applyBluetoothPermission(BleDevicePicker.this))
+            return;
         synchronized (BleDevicePicker.this) {
             if (ifScanning)
                 return;
@@ -115,13 +128,22 @@ public class BleDevicePicker extends ListActivity {
 
             mLeDeviceListAdapter.clear();
             mLeDeviceListAdapter.notifyDataSetChanged();
-            // Stops scanning after a pre-defined scan period.
-            mHandler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    stopScan();
+
+            // Auto connect to the device when only one valid device name in the list
+            mHandler.postDelayed(() -> {
+                if (mLeDeviceListAdapter.getCount() == 1){
+                    onListItemClick(null, null, 0, 0);
+                }
+            }, AUTO_CONNECT_PERIOD);
+
+            mHandler.postDelayed(() -> {
+                if (mLeDeviceListAdapter.getCount() == 0){
+                    Toast.makeText(BleDevicePicker.this, "No sensors found!\nPlease check if the Sensor is on or with power.", Toast.LENGTH_LONG).show();
                 }
             }, SCAN_PERIOD);
+
+            // Stops scanning after a pre-defined scan period.
+            mHandler.postDelayed(this::stopScan, SCAN_PERIOD);
         }
     }
 
@@ -142,6 +164,27 @@ public class BleDevicePicker extends ListActivity {
             });
         }
     };
+
+    private boolean applyBluetoothPermission(Context context) {
+        List<String> permissionsList = new ArrayList<>();
+
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED)
+            permissionsList.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH) != PackageManager.PERMISSION_GRANTED)
+            permissionsList.add(Manifest.permission.BLUETOOTH);
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_ADMIN) != PackageManager.PERMISSION_GRANTED)
+            permissionsList.add(Manifest.permission.BLUETOOTH_ADMIN);
+
+        if (permissionsList.size() > 0) {
+            requestPermissionTime = new Date();
+            ActivityCompat.requestPermissions(
+                    (Activity) context,
+                    permissionsList.toArray(new String[0]),
+                    1);
+            return false;
+        }
+        return true;
+    }
 
     // Customized ListAdapter
     private class LeDeviceListAdapter extends BaseAdapter {
