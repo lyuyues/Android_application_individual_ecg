@@ -67,7 +67,7 @@ public final class Global {
     public static final double yAxis_Max_Channel1 = 7.5d;
     public static final double yAxis_Min_Channel2 = 4d;
     public static final double yAxis_Max_Channel2 = 7.5d;
-    public static final String RootPath = "/sdcard/Heart Carer Data";
+    public static String RootPath;
     public static final BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
     public static final String shareUsername = "username";
     public static String username;
@@ -327,7 +327,7 @@ public final class Global {
      * @param jso:
      *            JsonObject containing user preference
      */
-    public static final void initRegUser(JSONObject jso) {
+    public static final void initRegUser(JSONObject jso, Context context) {
         try {
             userid = jso.getInt("userid");
             emergencynum = jso.getString("emergencynum");
@@ -352,6 +352,8 @@ public final class Global {
         }
 
         ifRegUser = true;
+
+        RootPath = context.getApplicationInfo().dataDir;
 
         String FilePath = RootPath + "/" + String.valueOf(userid);
         cachePath = FilePath + "/Cache";
@@ -394,7 +396,6 @@ public final class Global {
             mLogin.login();
         }
     }
-
 
     public static void logout() {
         Dynamic_id = "";
