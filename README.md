@@ -6,6 +6,7 @@ is the smart-phone ECG technology. Previously, obtaining an ECG has involved a
 bulky machine requiring medical training to operate. Now, most of the smart-phone
 ECG technologies involve a single-lead ECG but not precise enough and passively
 detection.
+
 HC provides a 2-lead ECG obtained from a small sensor that wirelessly com-
 municates with an Android smart-phone. It is capable of monitoring arrhythmias and
 heart rate to match the increasing demand for screening, diagnosis, and monitoring
