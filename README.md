@@ -13,4 +13,4 @@ heart rate to match the increasing demand for screening, diagnosis, and monitori
 of rhythm disorders. The implementation of HeartCarer runs on an Android smart-
 phone and has two version: clinical and individual. The clinical version is associated
 with medical processes while the individual version is for costumers easy to use on
-their own sake.
+their own sake. The individual version is for individual user to observe their ECG and potentially share the app created report with their doctors.
